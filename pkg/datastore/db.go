@@ -78,6 +78,11 @@ func InitNewDB(db *DB) error {
 		return err
 	}
 
+	err = db.CreateTableAgents()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

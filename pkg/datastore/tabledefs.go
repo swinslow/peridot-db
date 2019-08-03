@@ -142,3 +142,22 @@ func (db *DB) CreateTableFileInstances() error {
 	`)
 	return err
 }
+
+// CreateTableAgents creates the agents table if it
+// does not already exist.
+func (db *DB) CreateTableAgents() error {
+	_, err := db.sqldb.Exec(`
+		CREATE TABLE IF NOT EXISTS peridot.agents (
+			id SERIAL PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			is_active BOOLEAN,
+			address STRING,
+			port INTEGER,
+			is_codereader BOOLEAN,
+			is_spdxreader BOOLEAN,
+			is_codewriter BOOLEAN,
+			is_spdxwriter BOOLEAN
+		)
+	`)
+	return err
+}

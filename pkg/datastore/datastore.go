@@ -181,4 +181,28 @@ type Datastore interface {
 	// with the given ID. It returns nil on success or an
 	// if failing.
 	DeleteFileInstance(id uint64) error
+
+	// ===== Agents =====
+	// GetAllAgents returns a slice of all agents in the database.
+	GetAllAgents() ([]*Agent, error)
+	// GetAgentByID returns the Agent with the given ID, or nil
+	// and an error if not found.
+	GetAgentByID(id uint32) (*Agent, error)
+	// GetAgentByName returns the Agent with the given Name, or nil
+	// and an error if not found.
+	GetAgentByName(name string) (*Agent, error)
+	// AddAgent adds a new Agent with the given data. It returns the new
+	// agent's ID on success or an error if failing.
+	AddAgent(name string, isActive bool, address string, port int, isCodeReader bool, isSpdxReader bool, isCodeWriter bool, isSpdxWriter bool) (uint32, error)
+	// UpdateAgentStatus updates an existing Agent with the given ID,
+	// setting whether it is active and its address and port. It returns
+	// nil on success or an error if failing.
+	UpdateAgentStatus(id uint32, isActive bool, address string, port int) error
+	// UpdateAgentAbilities updates an existing Agent with the given ID,
+	// setting its abilities to read/write code/SPDX. It returns nil on
+	// success or an error if failing.
+	UpdateAgentAbilities(id uint32, isCodeReader bool, isSpdxReader bool, isCodeWriter bool, isSpdxWriter bool) error
+	// DeleteAgent deletes an existing Agent with the given ID.
+	// It returns nil on success or an error if failing.
+	DeleteAgent(id uint32) error
 }
