@@ -177,7 +177,7 @@ func createTableAgents(db *DB) error {
 			id SERIAL PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,
 			is_active BOOLEAN,
-			address STRING,
+			address TEXT,
 			port INTEGER,
 			is_codereader BOOLEAN,
 			is_spdxreader BOOLEAN,
