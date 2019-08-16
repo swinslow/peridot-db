@@ -404,6 +404,38 @@ func (db *DB) AddJobWithConfigs(repoPullID uint32, agentID uint32, priorJobIDs [
 	return jobID, nil
 }
 
+// UpdateJobIsReady sets the boolean value to specify
+// whether the Job with the gievn ID is ready to be run.
+// It does _not_ actually run the Job. It returns nil on
+// success or an error if failing.
+func (db *DB) UpdateJobIsReady(id uint32, ready bool) error {
+	var err error
+	var result sql.Result
+
+	// FIXME consider whether to move out into one-time-prepared statements
+	stmt, err := db.sqldb.Prepare("UPDATE peridot.jobs SET is_ready = $1 WHERE id = $2")
+	if err != nil {
+		return err
+	}
+	result, err = stmt.Exec(ready, id)
+
+	// check error
+	if err != nil {
+		return err
+	}
+
+	// check that something was actually updated
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no job found with ID %v", id)
+	}
+
+	return nil
+}
+
 // DeleteJob deletes an existing Job with the given ID.
 // It returns nil on success or an error if failing.
 func (db *DB) DeleteJob(id uint32) error {

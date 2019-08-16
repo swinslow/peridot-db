@@ -219,6 +219,11 @@ type Datastore interface {
 	// noted configuration values. It returns the new job's ID
 	// on success or an error if failing.
 	AddJobWithConfigs(repoPullID uint32, agentID uint32, priorJobIDs []uint32, configKV map[string]string, configCodeReader map[string]JobPathConfig, configSpdxReader map[string]JobPathConfig) (uint32, error)
+	// UpdateJobIsReady sets the boolean value to specify
+	// whether the Job with the gievn ID is ready to be run.
+	// It does _not_ actually run the Job. It returns nil on
+	// success or an error if failing.
+	UpdateJobIsReady(id uint32, ready bool) error
 	// DeleteJob deletes an existing Job with the given ID.
 	// It returns nil on success or an error if failing.
 	DeleteJob(id uint32) error

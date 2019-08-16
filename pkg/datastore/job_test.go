@@ -551,6 +551,64 @@ func TestShouldAddJobWithPriorJobsAndConfigs(t *testing.T) {
 	}
 }
 
+func TestShouldUpdateJobIsReady(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	regexStmt := `[UPDATE peridot.job SET is_ready = \$1 WHERE id = \$2]`
+	mock.ExpectPrepare(regexStmt)
+	stmt := "UPDATE peridot.jobs"
+	mock.ExpectExec(stmt).
+		WithArgs(true, 12).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// run the tested function
+	err = db.UpdateJobIsReady(12, true)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestShouldFailUpdateJobIsReadyWithUnknownID(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	regexStmt := `[UPDATE peridot.jobs SET is_ready = \$1 WHERE id = \$2]`
+	mock.ExpectPrepare(regexStmt)
+	stmt := "UPDATE peridot.jobs"
+	mock.ExpectExec(stmt).
+		WithArgs(false, 413).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// run the tested function with an unknown project ID number
+	err = db.UpdateJobIsReady(413, false)
+	if err == nil {
+		t.Fatalf("expected non-nil error, got nil")
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
 func TestShouldDeleteJob(t *testing.T) {
 	// set up mock
 	sqldb, mock, err := sqlmock.New()
