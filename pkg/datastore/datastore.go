@@ -205,4 +205,21 @@ type Datastore interface {
 	// DeleteAgent deletes an existing Agent with the given ID.
 	// It returns nil on success or an error if failing.
 	DeleteAgent(id uint32) error
+
+	// ===== Jobs =====
+	// GetAllJobsForRepoPull returns a slice of all jobs
+	// in the database for the given RepoPull ID.
+	GetAllJobsForRepoPull(rpID uint32) ([]*Job, error)
+	// GetJobByID returns the job in the database with the given ID.
+	GetJobByID(id uint32) (*Job, error)
+	// AddJob adds a new job as specified, with empty configs.
+	// It returns the new job's ID on success or an error if failing.
+	AddJob(repoPullID uint32, agentID uint32, priorJobIDs []uint32) (uint32, error)
+	// AddJobWithConfigs adds a new job as specified, with the
+	// noted configuration values. It returns the new job's ID
+	// on success or an error if failing.
+	AddJobWithConfigs(repoPullID uint32, agentID uint32, priorJobIDs []uint32, configKV map[string]string, configCodeReader map[string]JobPathConfig, configSpdxReader map[string]JobPathConfig) (uint32, error)
+	// DeleteJob deletes an existing Job with the given ID.
+	// It returns nil on success or an error if failing.
+	DeleteJob(id uint32) error
 }

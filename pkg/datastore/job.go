@@ -5,6 +5,7 @@ package datastore
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/lib/pq"
@@ -53,15 +54,23 @@ type Job struct {
 	// means that once the prior jobs are complete, this job
 	// is also ready to be run.
 	IsReady bool `json:"is_ready"`
-	// ConfigKV is a key-value map of strings for configuring
+
+	// Config is the collection of configurations for this job.
+	Config JobConfig `json:"config,omitempty"`
+}
+
+// JobConfig contains the three available types of configurations
+// variables for a job.
+type JobConfig struct {
+	// KV is a key-value map of strings for configuring
 	// this job.
-	ConfigKV map[string]string
-	// ConfigCodeReader is a key-value map of strings to
+	KV map[string]string `json:"kv,omitempty"`
+	// CodeReader is a key-value map of strings to
 	// JobPathConfigs for configuring codereader agents.
-	ConfigCodeReader map[string]JobPathConfig
-	// ConfigSpdxReader is a key-value map of strings to
-	// JobPathConfigs for configuring codereader agents.
-	ConfigSpdxReader map[string]JobPathConfig
+	CodeReader map[string]JobPathConfig `json:"codereader,omitempty"`
+	// SpdxReader is a key-value map of strings to
+	// JobPathConfigs for configuring spdxreader agents.
+	SpdxReader map[string]JobPathConfig `json:"spdxreader,omitempty"`
 }
 
 // JobPathConfig describes a single configuration field for a Job
@@ -70,14 +79,14 @@ type Job struct {
 type JobPathConfig struct {
 	// Value is ignored if PriorJobID is >0; if priorjob_id
 	// is 0, then Value is the value that will be passed along
-	// to the agent here.
-	Value string
+	// to the agent here. It is represented as "path" in JSON.
+	Value string `json:"path,omitempty"`
 
 	// PriorJobID is the ID of the previous Job that will be
 	// passed along to the agent as part of the input path.
 	// If PriorJobID is 0, then the Value will be passed along
 	// instead.
-	PriorJobID uint32
+	PriorJobID uint32 `json:"priorjob_id,omitempty"`
 }
 
 // GetAllJobsForRepoPull returns a slice of all jobs
@@ -103,9 +112,9 @@ func (db *DB) GetAllJobsForRepoPull(rpID uint32) ([]*Job, error) {
 
 		// create slices for bits that'll (possibly) get filled in below
 		j.PriorJobIDs = []uint32{}
-		j.ConfigKV = map[string]string{}
-		j.ConfigCodeReader = map[string]JobPathConfig{}
-		j.ConfigSpdxReader = map[string]JobPathConfig{}
+		j.Config.KV = map[string]string{}
+		j.Config.CodeReader = map[string]JobPathConfig{}
+		j.Config.SpdxReader = map[string]JobPathConfig{}
 
 		js[j.ID] = j
 		jobIDs = append(jobIDs, j.ID)
@@ -137,18 +146,18 @@ func (db *DB) GetAllJobsForRepoPull(rpID uint32) ([]*Job, error) {
 		}
 		switch jcType {
 		case JobConfigKV:
-			js[jid].ConfigKV[key] = value
+			js[jid].Config.KV[key] = value
 		case JobConfigCodeReader:
 			if pjid > 0 {
-				js[jid].ConfigCodeReader[key] = JobPathConfig{PriorJobID: pjid}
+				js[jid].Config.CodeReader[key] = JobPathConfig{PriorJobID: pjid}
 			} else {
-				js[jid].ConfigCodeReader[key] = JobPathConfig{Value: value}
+				js[jid].Config.CodeReader[key] = JobPathConfig{Value: value}
 			}
 		case JobConfigSpdxReader:
 			if pjid > 0 {
-				js[jid].ConfigSpdxReader[key] = JobPathConfig{PriorJobID: pjid}
+				js[jid].Config.SpdxReader[key] = JobPathConfig{PriorJobID: pjid}
 			} else {
-				js[jid].ConfigSpdxReader[key] = JobPathConfig{Value: value}
+				js[jid].Config.SpdxReader[key] = JobPathConfig{Value: value}
 			}
 		}
 	}
@@ -194,9 +203,9 @@ func (db *DB) GetJobByID(id uint32) (*Job, error) {
 
 	// create slices for bits that'll (possibly) get filled in below
 	j.PriorJobIDs = []uint32{}
-	j.ConfigKV = map[string]string{}
-	j.ConfigCodeReader = map[string]JobPathConfig{}
-	j.ConfigSpdxReader = map[string]JobPathConfig{}
+	j.Config.KV = map[string]string{}
+	j.Config.CodeReader = map[string]JobPathConfig{}
+	j.Config.SpdxReader = map[string]JobPathConfig{}
 
 	// next, query job configs and fill in those details
 	jpcRows, err := db.sqldb.Query("SELECT job_id, type, key, value, priorjob_id FROM peridot.jobpathconfigs WHERE job_id = $1", id)
@@ -221,18 +230,18 @@ func (db *DB) GetJobByID(id uint32) (*Job, error) {
 		}
 		switch jcType {
 		case JobConfigKV:
-			j.ConfigKV[key] = value
+			j.Config.KV[key] = value
 		case JobConfigCodeReader:
 			if pjid > 0 {
-				j.ConfigCodeReader[key] = JobPathConfig{PriorJobID: pjid}
+				j.Config.CodeReader[key] = JobPathConfig{PriorJobID: pjid}
 			} else {
-				j.ConfigCodeReader[key] = JobPathConfig{Value: value}
+				j.Config.CodeReader[key] = JobPathConfig{Value: value}
 			}
 		case JobConfigSpdxReader:
 			if pjid > 0 {
-				j.ConfigSpdxReader[key] = JobPathConfig{PriorJobID: pjid}
+				j.Config.SpdxReader[key] = JobPathConfig{PriorJobID: pjid}
 			} else {
-				j.ConfigSpdxReader[key] = JobPathConfig{Value: value}
+				j.Config.SpdxReader[key] = JobPathConfig{Value: value}
 			}
 		}
 	}
@@ -263,6 +272,15 @@ func (db *DB) AddJob(repoPullID uint32, agentID uint32, priorJobIDs []uint32) (u
 	return db.AddJobWithConfigs(repoPullID, agentID, priorJobIDs, nil, nil, nil)
 }
 
+// used in AddJobWithConfigs below
+type configStmtValue struct {
+	jobID      uint32
+	configType int
+	key        string
+	value      string
+	priorjobID uint32
+}
+
 // AddJobWithConfigs adds a new job as specified, with the
 // noted configuration values. It returns the new job's ID
 // on success or an error if failing.
@@ -289,12 +307,132 @@ func (db *DB) AddJobWithConfigs(repoPullID uint32, agentID uint32, priorJobIDs [
 		}
 
 		for _, pjID := range priorJobIDs {
-			res, err = priorJobStmt.Exec(jobID, pjID)
+			res, err := priorJobStmt.Exec(jobID, pjID)
+			// check error
 			if err != nil {
 				return 0, err
+			}
+
+			// check that something was actually inserted
+			rows, err := res.RowsAffected()
+			if err != nil {
+				return 0, err
+			}
+			if rows == 0 {
+				// problem should have been caused by bad prior job ID,
+				// because we just created the current job ID
+				return 0, fmt.Errorf("no prior job found with ID %v", pjID)
+			}
+		}
+	}
+
+	// and now, if we have any job configs, add those to that table
+	if len(configKV) > 0 || len(configCodeReader) > 0 || len(configSpdxReader) > 0 {
+		// cycle through each config map, sorting to order by keys,
+		// and build slice of statement values to insert
+		stmtVals := []*configStmtValue{}
+
+		keys := []string{}
+		for k := range configKV {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			sv := configStmtValue{jobID: jobID, configType: IntFromJobConfigType(JobConfigKV), key: k, value: configKV[k], priorjobID: 0}
+			stmtVals = append(stmtVals, &sv)
+		}
+
+		keys = []string{}
+		for k := range configCodeReader {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			var sv configStmtValue
+			pc := configCodeReader[k]
+			if pc.PriorJobID > 0 {
+				sv = configStmtValue{jobID: jobID, configType: IntFromJobConfigType(JobConfigCodeReader), key: k, value: "", priorjobID: pc.PriorJobID}
+			} else {
+				sv = configStmtValue{jobID: jobID, configType: IntFromJobConfigType(JobConfigCodeReader), key: k, value: pc.Value, priorjobID: 0}
+			}
+			stmtVals = append(stmtVals, &sv)
+		}
+
+		keys = []string{}
+		for k := range configSpdxReader {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			var sv configStmtValue
+			pc := configSpdxReader[k]
+			if pc.PriorJobID > 0 {
+				sv = configStmtValue{jobID: jobID, configType: IntFromJobConfigType(JobConfigSpdxReader), key: k, value: "", priorjobID: pc.PriorJobID}
+			} else {
+				sv = configStmtValue{jobID: jobID, configType: IntFromJobConfigType(JobConfigSpdxReader), key: k, value: pc.Value, priorjobID: 0}
+			}
+			stmtVals = append(stmtVals, &sv)
+		}
+
+		// prepare statement
+		configStmt, err := db.sqldb.Prepare("INSERT INTO peridot.jobpathconfigs(job_id, type, key, value, priorjob_id) VALUES ($1, $2, $3, $4, $5)")
+		if err != nil {
+			return 0, err
+		}
+
+		// and cycle through statement values, adding them
+		for _, stv := range stmtVals {
+			res, err := configStmt.Exec(stv.jobID, stv.configType, stv.key, stv.value, stv.priorjobID)
+			// check error
+			if err != nil {
+				return 0, err
+			}
+
+			// check that something was actually inserted
+			rows, err := res.RowsAffected()
+			if err != nil {
+				return 0, err
+			}
+			if rows == 0 {
+				// problem should have been caused by bad prior job ID,
+				// because we just created the current job ID
+				return 0, fmt.Errorf("error adding values for job %v, config %v, %v, %v, %v", stv.jobID, stv.configType, stv.key, stv.value, stv.priorjobID)
 			}
 		}
 	}
 
 	return jobID, nil
+}
+
+// DeleteJob deletes an existing Job with the given ID.
+// It returns nil on success or an error if failing.
+func (db *DB) DeleteJob(id uint32) error {
+	var err error
+	var result sql.Result
+
+	// FIXME consider whether need to delete sub-elements first, or
+	// FIXME whether to set up sub-elements' schemas to delete on cascade
+
+	// FIXME consider whether to move out into one-time-prepared statement
+	stmt, err := db.sqldb.Prepare("DELETE FROM peridot.jobs WHERE id = $1")
+	if err != nil {
+		return err
+	}
+	result, err = stmt.Exec(id)
+
+	// check error
+	if err != nil {
+		return err
+	}
+
+	// check that something was actually deleted
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no job found with ID %v", id)
+	}
+
+	return nil
 }
