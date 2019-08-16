@@ -4,12 +4,38 @@ package datastore
 
 import "os"
 
-// CreateTableUsersAndAddInitialAdminUser creates the users table
+func createTables(db *DB) error {
+	createFuncs := []func(db *DB) error{
+		createTableUsersAndAddInitialAdminUser,
+		createTableProjects,
+		createTableSubprojects,
+		createTableRepos,
+		createTableRepoBranches,
+		createTableRepoPulls,
+		createTableFileHashes,
+		createTableFileInstances,
+		createTableAgents,
+		createTableJobs,
+		createTableJobPathConfigs,
+		createTableJobPriorIDs,
+	}
+
+	for _, f := range createFuncs {
+		err := f(db)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createTableUsersAndAddInitialAdminUser creates the users table
 // if it does not already exist. Also, if there are not yet any
 // users, AND the environment variable INITIALADMINGITHUB is set,
 // then it creates an initial admin user with ID 1 and the Github
 // user name specified in that variable.
-func (db *DB) CreateTableUsersAndAddInitialAdminUser() error {
+func createTableUsersAndAddInitialAdminUser(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.users (
 			id INTEGER NOT NULL PRIMARY KEY,
@@ -35,9 +61,9 @@ func (db *DB) CreateTableUsersAndAddInitialAdminUser() error {
 	return err
 }
 
-// CreateTableProjects creates the projects table if it
+// createTableProjects creates the projects table if it
 // does not already exist.
-func (db *DB) CreateTableProjects() error {
+func createTableProjects(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.projects (
 			id SERIAL PRIMARY KEY,
@@ -48,9 +74,9 @@ func (db *DB) CreateTableProjects() error {
 	return err
 }
 
-// CreateTableSubprojects creates the subprojects table
+// createTableSubprojects creates the subprojects table
 // if it does not already exist.
-func (db *DB) CreateTableSubprojects() error {
+func createTableSubprojects(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.subprojects (
 			id SERIAL PRIMARY KEY,
@@ -63,9 +89,9 @@ func (db *DB) CreateTableSubprojects() error {
 	return err
 }
 
-// CreateTableRepos creates the repos table if it does
+// createTableRepos creates the repos table if it does
 // not already exist.
-func (db *DB) CreateTableRepos() error {
+func createTableRepos(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.repos (
 			id SERIAL PRIMARY KEY,
@@ -78,9 +104,9 @@ func (db *DB) CreateTableRepos() error {
 	return err
 }
 
-// CreateTableRepoBranches creates the repo_branches table
+// createTableRepoBranches creates the repo_branches table
 // if it does not already exist.
-func (db *DB) CreateTableRepoBranches() error {
+func createTableRepoBranches(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.repo_branches (
 			repo_id INTEGER,
@@ -92,9 +118,9 @@ func (db *DB) CreateTableRepoBranches() error {
 	return err
 }
 
-// CreateTableRepoPulls creates the repo_pulls table if it
+// createTableRepoPulls creates the repo_pulls table if it
 // does not already exist.
-func (db *DB) CreateTableRepoPulls() error {
+func createTableRepoPulls(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.repo_pulls (
 			id SERIAL PRIMARY KEY,
@@ -114,9 +140,9 @@ func (db *DB) CreateTableRepoPulls() error {
 	return err
 }
 
-// CreateTableFileHashes creates the file_hashes table if it
+// createTableFileHashes creates the file_hashes table if it
 // does not already exist.
-func (db *DB) CreateTableFileHashes() error {
+func createTableFileHashes(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.file_hashes (
 			id SERIAL PRIMARY KEY,
@@ -127,9 +153,9 @@ func (db *DB) CreateTableFileHashes() error {
 	return err
 }
 
-// CreateTableFileInstances creates the file_instances table if it
+// createTableFileInstances creates the file_instances table if it
 // does not already exist.
-func (db *DB) CreateTableFileInstances() error {
+func createTableFileInstances(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.file_instances (
 			id SERIAL PRIMARY KEY,
@@ -143,9 +169,9 @@ func (db *DB) CreateTableFileInstances() error {
 	return err
 }
 
-// CreateTableAgents creates the agents table if it
+// createTableAgents creates the agents table if it
 // does not already exist.
-func (db *DB) CreateTableAgents() error {
+func createTableAgents(db *DB) error {
 	_, err := db.sqldb.Exec(`
 		CREATE TABLE IF NOT EXISTS peridot.agents (
 			id SERIAL PRIMARY KEY,
@@ -157,6 +183,60 @@ func (db *DB) CreateTableAgents() error {
 			is_spdxreader BOOLEAN,
 			is_codewriter BOOLEAN,
 			is_spdxwriter BOOLEAN
+		)
+	`)
+	return err
+}
+
+// createTableJobs creates the jobs table if it does
+// not already exist.
+func createTableJobs(db *DB) error {
+	_, err := db.sqldb.Exec(`
+		CREATE TABLE IF NOT EXISTS peridot.jobs (
+			id SERIAL PRIMARY KEY,
+			repopull_id INTEGER NOT NULL,
+			agent_id INTEGER NOT NULL,
+			started_at TIMESTAMP WITH TIME ZONE,
+			finished_at TIMESTAMP WITH TIME ZONE,
+			status INTEGER,
+			health INTEGER,
+			output TEXT,
+			is_ready BOOLEAN,
+			FOREIGN KEY (repopull_id) REFERENCES peridot.repo_pulls (id) ON DELETE CASCADE,
+			FOREIGN KEY (agent_id) REFERENCES peridot.agents (id) ON DELETE CASCADE
+		)
+	`)
+	return err
+}
+
+// createTableJobPathConfigs creates the jobpathconfigs
+// table if it does not already exist.
+func createTableJobPathConfigs(db *DB) error {
+	_, err := db.sqldb.Exec(`
+		CREATE TABLE IF NOT EXISTS peridot.jobpathconfigs (
+			job_id INTEGER NOT NULL,
+			type INTEGER NOT NULL,
+			key TEXT,
+			value TEXT,
+			priorjob_id INTEGER NOT NULL,
+			FOREIGN KEY (job_id) REFERENCES peridot.jobs (id) ON DELETE CASCADE,
+			FOREIGN KEY (priorjob_id) REFERENCES peridot.jobs (id) ON DELETE CASCADE,
+			UNIQUE (job_id, type, key)
+		)
+	`)
+	return err
+}
+
+// createTableJobPriorIDs creates the jobpriorids
+// table if it does not already exist.
+func createTableJobPriorIDs(db *DB) error {
+	_, err := db.sqldb.Exec(`
+		CREATE TABLE IF NOT EXISTS peridot.jobpriorids (
+			job_id INTEGER NOT NULL,
+			priorjob_id INTEGER NOT NULL,
+			FOREIGN KEY (job_id) REFERENCES peridot.jobs (id) ON DELETE CASCADE,
+			FOREIGN KEY (priorjob_id) REFERENCES peridot.jobs (id) ON DELETE CASCADE,
+			UNIQUE (job_id, priorjob_id)
 		)
 	`)
 	return err

@@ -38,47 +38,7 @@ func InitNewDB(db *DB) error {
 		return err
 	}
 
-	err = db.CreateTableUsersAndAddInitialAdminUser()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableProjects()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableSubprojects()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableRepos()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableRepoBranches()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableRepoPulls()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableFileHashes()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableFileInstances()
-	if err != nil {
-		return err
-	}
-
-	err = db.CreateTableAgents()
+	err = createTables(db)
 	if err != nil {
 		return err
 	}
