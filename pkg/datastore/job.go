@@ -26,7 +26,7 @@ type Job struct {
 	AgentID uint32 `json:"agent_id"`
 	// PriorJobIDs is a slice of IDs for jobs that must finish
 	// without erroring before this job can be run.
-	PriorJobIDs []uint32 `json:"priorjob_ids"`
+	PriorJobIDs []uint32 `json:"priorjob_ids,omitempty"`
 
 	// ===== status variables =====
 
