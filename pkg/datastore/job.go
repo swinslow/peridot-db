@@ -223,12 +223,20 @@ func (db *DB) GetJobByID(id uint32) (*Job, error) {
 	defer jpcRows.Close()
 
 	for jpcRows.Next() {
-		var jid, pjid uint32
+		var jid uint32
 		var typeInt int
 		var key, value string
-		err := jpcRows.Scan(&jid, &typeInt, &key, &value, &pjid)
+		var pjidNullable sql.NullInt64
+		err := jpcRows.Scan(&jid, &typeInt, &key, &value, &pjidNullable)
 		if err != nil {
 			return nil, err
+		}
+
+		var pjid uint32
+		if pjidNullable.Valid {
+			pjid = uint32(pjidNullable.Int64)
+		} else {
+			pjid = 0
 		}
 
 		// update the applicable job depending on ID and type
