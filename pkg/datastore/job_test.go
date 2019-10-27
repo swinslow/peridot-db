@@ -3,6 +3,7 @@
 package datastore
 
 import (
+	"database/sql"
 	"encoding/json"
 	"testing"
 	"time"
@@ -426,13 +427,13 @@ func TestShouldAddJobWithNoPriorJobsWithConfigs(t *testing.T) {
 	configStmt := `[INSERT INTO peridot.jobpathconfigs(job_id, type, key, value, priorjob_id) VALUES (\$1, \$2, \$3, \$4, \$5)]`
 	mock.ExpectPrepare(configStmt)
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 0, "goodbye", "world", 0).
+		WithArgs(24, 0, "goodbye", "world", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 0, "hi", "steve", 0).
+		WithArgs(24, 0, "hi", "steve", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 1, "historical", "https://example.com/spdx/whatever.spdx", 0).
+		WithArgs(24, 1, "historical", "https://example.com/spdx/whatever.spdx", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
 		WithArgs(24, 1, "primary", "", 10).
@@ -505,13 +506,13 @@ func TestShouldAddJobWithPriorJobsAndConfigs(t *testing.T) {
 	configStmt := `[INSERT INTO peridot.jobpathconfigs(job_id, type, key, value, priorjob_id) VALUES (\$1, \$2, \$3, \$4, \$5)]`
 	mock.ExpectPrepare(configStmt)
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 0, "goodbye", "world", 0).
+		WithArgs(24, 0, "goodbye", "world", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 0, "hi", "steve", 0).
+		WithArgs(24, 0, "hi", "steve", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 1, "historical", "https://example.com/spdx/whatever.spdx", 0).
+		WithArgs(24, 1, "historical", "https://example.com/spdx/whatever.spdx", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
 		WithArgs(24, 1, "primary", "", 10).
@@ -584,10 +585,10 @@ func TestShouldAddJobWithPriorJobsAndOnlySomeConfigs(t *testing.T) {
 	configStmt := `[INSERT INTO peridot.jobpathconfigs(job_id, type, key, value, priorjob_id) VALUES (\$1, \$2, \$3, \$4, \$5)]`
 	mock.ExpectPrepare(configStmt)
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 0, "goodbye", "world", 0).
+		WithArgs(24, 0, "goodbye", "world", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
-		WithArgs(24, 0, "hi", "steve", 0).
+		WithArgs(24, 0, "hi", "steve", sql.NullInt64{Int64: 0, Valid: false}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(configStmt).
 		WithArgs(24, 2, "primary", "", 4).

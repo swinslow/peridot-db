@@ -218,7 +218,7 @@ func createTableJobPathConfigs(db *DB) error {
 			type INTEGER NOT NULL,
 			key TEXT,
 			value TEXT,
-			priorjob_id INTEGER NOT NULL,
+			priorjob_id INTEGER,
 			FOREIGN KEY (job_id) REFERENCES peridot.jobs (id) ON DELETE CASCADE,
 			FOREIGN KEY (priorjob_id) REFERENCES peridot.jobs (id) ON DELETE CASCADE,
 			UNIQUE (job_id, type, key)
