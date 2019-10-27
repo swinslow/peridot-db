@@ -92,7 +92,10 @@ type JobPathConfig struct {
 // GetAllJobsForRepoPull returns a slice of all jobs
 // in the database for the given RepoPull ID.
 func (db *DB) GetAllJobsForRepoPull(rpID uint32) ([]*Job, error) {
-	jobRows, err := db.sqldb.Query("SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE repopull_id = $1 ORDER BY id", rpID)
+	// note that we can't rely on a SQL query to order by id, because
+	// we're storing jobs in a map (so we can added in config etc. details)
+	// and we're converting it to a slice further below.
+	jobRows, err := db.sqldb.Query("SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE repopull_id = $1", rpID)
 	if err != nil {
 		return nil, err
 	}
@@ -188,11 +191,13 @@ func (db *DB) GetAllJobsForRepoPull(rpID uint32) ([]*Job, error) {
 	}
 
 	// all data is now filled in. now we need to convert the jobs map
-	// to a slice and return it
+	// to a slice, sort it, and return it
 	jsSlice := []*Job{}
 	for _, j := range js {
 		jsSlice = append(jsSlice, j)
 	}
+
+	sort.Slice(jsSlice, func(i, j int) bool { return jsSlice[i].ID < jsSlice[j].ID })
 
 	return jsSlice, nil
 }
