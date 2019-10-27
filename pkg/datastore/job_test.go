@@ -551,6 +551,76 @@ func TestShouldAddJobWithPriorJobsAndConfigs(t *testing.T) {
 	}
 }
 
+func TestShouldAddJobWithPriorJobsAndOnlySomeConfigs(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	// add to jobs table
+	jobStmt := `[INSERT INTO peridot.jobs(repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready) VALUES (\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8) RETURNING id]`
+	mock.ExpectPrepare(jobStmt)
+	mock.ExpectQuery(jobStmt).
+		WithArgs(15, 3, time.Time{}, time.Time{}, StatusStartup, HealthOK, "", false).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(24))
+
+	// and add to prior jobs IDs table
+	priorJobStmt := `[INSERT INTO peridot.jobpriorids(job_id, priorjob_id) VALUES (\$1, \$2)]`
+	mock.ExpectPrepare(priorJobStmt)
+	mock.ExpectExec(priorJobStmt).
+		WithArgs(24, 18).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(priorJobStmt).
+		WithArgs(24, 20).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(priorJobStmt).
+		WithArgs(24, 21).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// and add to configs table
+	configStmt := `[INSERT INTO peridot.jobpathconfigs(job_id, type, key, value, priorjob_id) VALUES (\$1, \$2, \$3, \$4, \$5)]`
+	mock.ExpectPrepare(configStmt)
+	mock.ExpectExec(configStmt).
+		WithArgs(24, 0, "goodbye", "world", 0).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(configStmt).
+		WithArgs(24, 0, "hi", "steve", 0).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(configStmt).
+		WithArgs(24, 2, "primary", "", 4).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// set configs
+	configKV := map[string]string{
+		"hi":      "steve",
+		"goodbye": "world",
+	}
+	configCodeReader := map[string]JobPathConfig{}
+	configSpdxReader := map[string]JobPathConfig{
+		"primary": JobPathConfig{PriorJobID: 4},
+	}
+
+	// run the tested function
+	jobID, err := db.AddJobWithConfigs(15, 3, []uint32{18, 20, 21}, configKV, configCodeReader, configSpdxReader)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+
+	// check returned value
+	if jobID != 24 {
+		t.Errorf("expected %v, got %v", 24, jobID)
+	}
+}
+
 func TestShouldUpdateJobIsReady(t *testing.T) {
 	// set up mock
 	sqldb, mock, err := sqlmock.New()
