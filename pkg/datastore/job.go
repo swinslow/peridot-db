@@ -92,7 +92,7 @@ type JobPathConfig struct {
 // GetAllJobsForRepoPull returns a slice of all jobs
 // in the database for the given RepoPull ID.
 func (db *DB) GetAllJobsForRepoPull(rpID uint32) ([]*Job, error) {
-	jobRows, err := db.sqldb.Query("SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE repopull_id = $1", rpID)
+	jobRows, err := db.sqldb.Query("SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE repopull_id = $1 ORDER BY id", rpID)
 	if err != nil {
 		return nil, err
 	}
