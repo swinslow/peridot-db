@@ -309,7 +309,7 @@ func (db *DB) AddJobWithConfigs(repoPullID uint32, agentID uint32, priorJobIDs [
 
 	// now, if we have any prior job IDs, add those to that table
 	if len(priorJobIDs) > 0 {
-		priorJobStmt, err := db.sqldb.Prepare("INSERT INTO peridot.priorjobids(job_id, priorjob_id) VALUES ($1, $2)")
+		priorJobStmt, err := db.sqldb.Prepare("INSERT INTO peridot.jobpriorids(job_id, priorjob_id) VALUES ($1, $2)")
 		if err != nil {
 			return 0, err
 		}
