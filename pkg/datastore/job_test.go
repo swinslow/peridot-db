@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/lib/pq"
 )
 
 func TestShouldGetAllJobsForOneRepoPull(t *testing.T) {
@@ -81,6 +82,101 @@ func TestShouldGetAllJobsForOneRepoPull(t *testing.T) {
 
 	// run the tested function
 	gotRows, err := db.GetAllJobsForRepoPull(14)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+
+	// and check returned values; should be ordered by job ID
+	if len(gotRows) != 2 {
+		t.Fatalf("expected len %d, got %d", 2, len(gotRows))
+	}
+	job0 := gotRows[0]
+	helperCompareJobs(t, &j4, job0)
+
+	job1 := gotRows[1]
+	helperCompareJobs(t, &j7, job1)
+}
+
+func TestShouldGetJobsWithMultipleIDs(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	j4 := Job{
+		ID:          4,
+		RepoPullID:  7,
+		AgentID:     6,
+		PriorJobIDs: []uint32{},
+		StartedAt:   time.Date(2019, 5, 2, 13, 53, 41, 671764, time.UTC),
+		FinishedAt:  time.Date(2019, 5, 2, 13, 54, 17, 386417, time.UTC),
+		Status:      StatusStopped,
+		Health:      HealthOK,
+		Output:      "success, 2930 files scanned",
+		IsReady:     true,
+		Config: JobConfig{
+			KV:         map[string]string{"hi": "there", "hello": "world"},
+			CodeReader: map[string]JobPathConfig{},
+			SpdxReader: map[string]JobPathConfig{},
+		},
+	}
+
+	j7 := Job{
+		ID:          7,
+		RepoPullID:  12,
+		AgentID:     2,
+		PriorJobIDs: []uint32{4},
+		StartedAt:   time.Date(2019, 5, 4, 12, 0, 0, 0, time.UTC),
+		FinishedAt:  time.Date(2019, 5, 4, 12, 0, 1, 0, time.UTC),
+		Status:      StatusRunning,
+		Health:      HealthDegraded,
+		Output:      "unable to read file abc.xyz; skipping and continuing",
+		IsReady:     true,
+		Config: JobConfig{
+			KV: map[string]string{},
+			CodeReader: map[string]JobPathConfig{
+				"primary": JobPathConfig{PriorJobID: 4},
+			},
+			SpdxReader: map[string]JobPathConfig{},
+		},
+	}
+
+	// expect first call to get jobs, without configs or prior job IDs
+	// NOTE that the query will submit the ID parameters as a string
+	sentRows1 := sqlmock.NewRows([]string{"id", "repopull_id", "agent_id", "started_at", "finished_at", "status", "health", "output", "is_ready"}).
+		AddRow(j4.ID, j4.RepoPullID, j4.AgentID, j4.StartedAt, j4.FinishedAt, j4.Status, j4.Health, j4.Output, j4.IsReady).
+		AddRow(j7.ID, j7.RepoPullID, j7.AgentID, j7.StartedAt, j7.FinishedAt, j7.Status, j7.Health, j7.Output, j7.IsReady)
+	mock.ExpectQuery(`SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{4, 7})).
+		WillReturnRows(sentRows1)
+
+	// expect second call to get job configs for found job IDs
+	sentRows2 := sqlmock.NewRows([]string{"job_id", "type", "key", "value", "priorjob_id"}).
+		AddRow(4, 0, "hi", "there", 0).
+		AddRow(4, 0, "hello", "world", 0).
+		AddRow(7, 1, "primary", "", 4)
+	mock.ExpectQuery(`SELECT job_id, type, key, value, priorjob_id FROM peridot.jobpathconfigs WHERE job_id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{4, 7})).
+		WillReturnRows(sentRows2)
+
+	// and expect third call to get prior job IDs for found job IDs
+	sentRows3 := sqlmock.NewRows([]string{"job_id", "priorjob_id"}).
+		AddRow(7, 4)
+	mock.ExpectQuery(`SELECT job_id, priorjob_id FROM peridot.jobpriorids WHERE job_id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{4, 7})).
+		WillReturnRows(sentRows3)
+
+	// run the tested function
+	gotRows, err := db.GetJobsByIDs([]uint32{4, 7})
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}

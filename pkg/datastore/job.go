@@ -202,6 +202,121 @@ func (db *DB) GetAllJobsForRepoPull(rpID uint32) ([]*Job, error) {
 	return jsSlice, nil
 }
 
+// GetJobsByIDs returns all of the jobs in the database with the given
+// IDs. If any ID is not present, it will be silently omitted (e.g.,
+// no error will be returned); the caller should check to confirm the
+// received jobs match those that were expected.
+func (db *DB) GetJobsByIDs(ids []uint32) ([]*Job, error) {
+	// note that we can't rely on a SQL query to order by id, because
+	// we're storing jobs in a map (so we can added in config etc. details)
+	// and we're converting it to a slice further below.
+	jobRows, err := db.sqldb.Query("SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE id = ANY ($1)", pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer jobRows.Close()
+
+	// collect jobs as a map for now, so we can find and add data based on ID
+	js := map[uint32]*Job{}
+	// also collect job IDs as we go so we'll have them for the next queries
+	jobIDs := []uint32{}
+
+	for jobRows.Next() {
+		j := &Job{}
+		err := jobRows.Scan(&j.ID, &j.RepoPullID, &j.AgentID, &j.StartedAt, &j.FinishedAt, &j.Status, &j.Health, &j.Output, &j.IsReady)
+		if err != nil {
+			return nil, err
+		}
+
+		// create slices for bits that'll (possibly) get filled in below
+		j.PriorJobIDs = []uint32{}
+		j.Config.KV = map[string]string{}
+		j.Config.CodeReader = map[string]JobPathConfig{}
+		j.Config.SpdxReader = map[string]JobPathConfig{}
+
+		js[j.ID] = j
+		jobIDs = append(jobIDs, j.ID)
+	}
+	if err = jobRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// next, query job configs and fill in those details
+	jpcRows, err := db.sqldb.Query("SELECT job_id, type, key, value, priorjob_id FROM peridot.jobpathconfigs WHERE job_id = ANY ($1)", pq.Array(jobIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer jpcRows.Close()
+
+	for jpcRows.Next() {
+		var jid uint32
+		var typeInt int
+		var key, value string
+		var pjidNullable sql.NullInt64
+		err := jpcRows.Scan(&jid, &typeInt, &key, &value, &pjidNullable)
+		if err != nil {
+			return nil, err
+		}
+
+		var pjid uint32
+		if pjidNullable.Valid {
+			pjid = uint32(pjidNullable.Int64)
+		} else {
+			pjid = 0
+		}
+
+		// update the applicable job depending on ID and type
+		jcType, err := JobConfigTypeFromInt(typeInt)
+		if err != nil {
+			return nil, err
+		}
+		switch jcType {
+		case JobConfigKV:
+			js[jid].Config.KV[key] = value
+		case JobConfigCodeReader:
+			if pjid > 0 {
+				js[jid].Config.CodeReader[key] = JobPathConfig{PriorJobID: pjid}
+			} else {
+				js[jid].Config.CodeReader[key] = JobPathConfig{Value: value}
+			}
+		case JobConfigSpdxReader:
+			if pjid > 0 {
+				js[jid].Config.SpdxReader[key] = JobPathConfig{PriorJobID: pjid}
+			} else {
+				js[jid].Config.SpdxReader[key] = JobPathConfig{Value: value}
+			}
+		}
+	}
+
+	// and then query the prior jobs IDs table to get that data too
+	priorRows, err := db.sqldb.Query("SELECT job_id, priorjob_id FROM peridot.jobpriorids WHERE job_id = ANY ($1)", pq.Array(jobIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer priorRows.Close()
+
+	for priorRows.Next() {
+		var jid, pjid uint32
+		err := priorRows.Scan(&jid, &pjid)
+		if err != nil {
+			return nil, err
+		}
+
+		js[jid].PriorJobIDs = append(js[jid].PriorJobIDs, pjid)
+	}
+
+	// all data is now filled in. now we need to convert the jobs map
+	// to a slice, sort it, and return it
+	jsSlice := []*Job{}
+	for _, j := range js {
+		jsSlice = append(jsSlice, j)
+	}
+
+	sort.Slice(jsSlice, func(i, j int) bool { return jsSlice[i].ID < jsSlice[j].ID })
+
+	return jsSlice, nil
+}
+
 // GetJobByID returns the job in the database with the given ID.
 func (db *DB) GetJobByID(id uint32) (*Job, error) {
 	j := &Job{}
@@ -285,6 +400,22 @@ func (db *DB) GetJobByID(id uint32) (*Job, error) {
 	}
 
 	return j, nil
+}
+
+// GetJobsByIDs returns all of the jobs in the database with the given
+// IDs. If any ID is not present, it will be silently omitted (e.g.,
+// no error will be returned); the caller should check to confirm the
+// received jobs match those that were expected.
+func GetJobsByIDs(ids []uint32) ([]*Job, error) {
+	return nil, nil
+}
+
+// GetReadyJobs returns up to n jobs that are "ready", where "ready"
+// means that BOTH (1) IsReady is true and (2) all jobs from its
+// PriorJobIDs are StatusStopped and either HealthOK or HealthDegraded.
+// If n is 0 then all "ready" jobs are returned.
+func GetReadyJobs(n uint32) ([]*Job, error) {
+	return nil, nil
 }
 
 // AddJob adds a new job as specified, with empty configs.

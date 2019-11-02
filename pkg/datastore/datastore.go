@@ -212,6 +212,16 @@ type Datastore interface {
 	GetAllJobsForRepoPull(rpID uint32) ([]*Job, error)
 	// GetJobByID returns the job in the database with the given ID.
 	GetJobByID(id uint32) (*Job, error)
+	// GetJobsByIDs returns all of the jobs in the database with the given
+	// IDs. If any ID is not present, it will be silently omitted (e.g.,
+	// no error will be returned); the caller should check to confirm the
+	// received jobs match those that were expected.
+	GetJobsByIDs(ids []uint32) ([]*Job, error)
+	// GetReadyJobs returns up to n jobs that are "ready", where "ready"
+	// means that BOTH (1) IsReady is true and (2) all jobs from its
+	// PriorJobIDs are StatusStopped and either HealthOK or HealthDegraded.
+	// If n is 0 then all "ready" jobs are returned.
+	GetReadyJobs(n uint32) ([]*Job, error)
 	// AddJob adds a new job as specified, with empty configs.
 	// It returns the new job's ID on success or an error if failing.
 	AddJob(repoPullID uint32, agentID uint32, priorJobIDs []uint32) (uint32, error)
