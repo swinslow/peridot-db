@@ -151,7 +151,6 @@ func TestShouldGetJobsWithMultipleIDs(t *testing.T) {
 	}
 
 	// expect first call to get jobs, without configs or prior job IDs
-	// NOTE that the query will submit the ID parameters as a string
 	sentRows1 := sqlmock.NewRows([]string{"id", "repopull_id", "agent_id", "started_at", "finished_at", "status", "health", "output", "is_ready"}).
 		AddRow(j4.ID, j4.RepoPullID, j4.AgentID, j4.StartedAt, j4.FinishedAt, j4.Status, j4.Health, j4.Output, j4.IsReady).
 		AddRow(j7.ID, j7.RepoPullID, j7.AgentID, j7.StartedAt, j7.FinishedAt, j7.Status, j7.Health, j7.Output, j7.IsReady)
@@ -289,6 +288,214 @@ func TestShouldFailGetJobByIDForUnknownID(t *testing.T) {
 	if err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
+}
+
+func TestShouldGetAllReadyJobs(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	// assumes same j4 as prior tests, and completed OK
+	j7 := Job{
+		ID:          7,
+		RepoPullID:  12,
+		AgentID:     2,
+		PriorJobIDs: []uint32{4},
+		StartedAt:   time.Date(2019, 5, 4, 12, 0, 0, 0, time.UTC),
+		FinishedAt:  time.Date(2019, 5, 4, 12, 0, 1, 0, time.UTC),
+		Status:      StatusStartup,
+		Health:      HealthOK,
+		Output:      "",
+		IsReady:     true,
+		Config: JobConfig{
+			KV: map[string]string{},
+			CodeReader: map[string]JobPathConfig{
+				"primary": JobPathConfig{PriorJobID: 4},
+			},
+			SpdxReader: map[string]JobPathConfig{},
+		},
+	}
+
+	// expect actual first call to get job IDs only, for "ready" jobs
+	// note that the query matches job.go but has backslashes inserted where needed
+	readyJobsQuery := `
+SELECT id
+FROM \(
+	SELECT id, \(CASE WHEN any_prior_unready IS NULL THEN false ELSE any_prior_unready END\) AS any_prior_unready, status, health, is_ready
+	FROM peridot.jobs
+	LEFT JOIN \(
+		SELECT DISTINCT id, \(\(priorjob_status != 3\) OR \(priorjob_health = 3\)\) AS any_prior_unready
+		FROM \(
+			SELECT id, priorjob_id, any_prior_unready
+			FROM \(
+				SELECT
+					peridot.jobpriorids.id AS id,
+					peridot.jobpriorids.priorjob_id AS priorjob_id,
+					peridot.jobs.status AS priorjob_status,
+					peridot.jobs.health AS priorjob_health
+				FROM peridot.jobprioids
+				LEFT JOIN peridot.jobs ON peridot.jobprioids.priorjob_id=peridot.jobs.id\) calc1
+			\) calc2
+		WHERE EXISTS\(SELECT 1 WHERE any_prior_unready = true\)
+	\) calc3 ON peridot.jobs.id = id
+\) calc4
+WHERE any_prior_unready = false AND status = 1 AND health = 1 AND is_ready = true
+ORDER BY id
+LIMIT \$1;
+`
+	sentRows0 := sqlmock.NewRows([]string{"id"}).
+		AddRow(j7.ID)
+	mock.ExpectQuery(readyJobsQuery).
+		WithArgs(0).
+		WillReturnRows(sentRows0)
+
+	// expect next call to get jobs, without configs or prior job IDs
+	sentRows1 := sqlmock.NewRows([]string{"id", "repopull_id", "agent_id", "started_at", "finished_at", "status", "health", "output", "is_ready"}).
+		AddRow(j7.ID, j7.RepoPullID, j7.AgentID, j7.StartedAt, j7.FinishedAt, j7.Status, j7.Health, j7.Output, j7.IsReady)
+	mock.ExpectQuery(`SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{7})).
+		WillReturnRows(sentRows1)
+
+	// expect next call to get job configs for found job IDs
+	sentRows2 := sqlmock.NewRows([]string{"job_id", "type", "key", "value", "priorjob_id"}).
+		AddRow(7, 1, "primary", "", 4)
+	mock.ExpectQuery(`SELECT job_id, type, key, value, priorjob_id FROM peridot.jobpathconfigs WHERE job_id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{7})).
+		WillReturnRows(sentRows2)
+
+	// and expect last call to get prior job IDs for found job IDs
+	sentRows3 := sqlmock.NewRows([]string{"job_id", "priorjob_id"}).
+		AddRow(7, 4)
+	mock.ExpectQuery(`SELECT job_id, priorjob_id FROM peridot.jobpriorids WHERE job_id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{7})).
+		WillReturnRows(sentRows3)
+
+	// run the tested function
+	gotRows, err := db.GetReadyJobs(0)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+
+	// and check returned values; should be ordered by job ID
+	if len(gotRows) != 1 {
+		t.Fatalf("expected len %d, got %d", 1, len(gotRows))
+	}
+	job0 := gotRows[0]
+	helperCompareJobs(t, &j7, job0)
+}
+
+func TestShouldGetUpToNReadyJobs(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	// assumes same j4 as prior tests, and completed OK
+	j7 := Job{
+		ID:          7,
+		RepoPullID:  12,
+		AgentID:     2,
+		PriorJobIDs: []uint32{4},
+		StartedAt:   time.Date(2019, 5, 4, 12, 0, 0, 0, time.UTC),
+		FinishedAt:  time.Date(2019, 5, 4, 12, 0, 1, 0, time.UTC),
+		Status:      StatusStartup,
+		Health:      HealthOK,
+		Output:      "",
+		IsReady:     true,
+		Config: JobConfig{
+			KV: map[string]string{},
+			CodeReader: map[string]JobPathConfig{
+				"primary": JobPathConfig{PriorJobID: 4},
+			},
+			SpdxReader: map[string]JobPathConfig{},
+		},
+	}
+
+	// expect actual first call to get job IDs only, for "ready" jobs
+	// note that the query matches job.go but has backslashes inserted where needed
+	readyJobsQuery := `
+SELECT id
+FROM \(
+	SELECT id, \(CASE WHEN any_prior_unready IS NULL THEN false ELSE any_prior_unready END\) AS any_prior_unready, status, health, is_ready
+	FROM peridot.jobs
+	LEFT JOIN \(
+		SELECT DISTINCT id, \(\(priorjob_status != 3\) OR \(priorjob_health = 3\)\) AS any_prior_unready
+		FROM \(
+			SELECT id, priorjob_id, any_prior_unready
+			FROM \(
+				SELECT
+					peridot.jobpriorids.id AS id,
+					peridot.jobpriorids.priorjob_id AS priorjob_id,
+					peridot.jobs.status AS priorjob_status,
+					peridot.jobs.health AS priorjob_health
+				FROM peridot.jobprioids
+				LEFT JOIN peridot.jobs ON peridot.jobprioids.priorjob_id=peridot.jobs.id\) calc1
+			\) calc2
+		WHERE EXISTS\(SELECT 1 WHERE any_prior_unready = true\)
+	\) calc3 ON peridot.jobs.id = id
+\) calc4
+WHERE any_prior_unready = false AND status = 1 AND health = 1 AND is_ready = true
+ORDER BY id
+LIMIT \$1;
+`
+	sentRows0 := sqlmock.NewRows([]string{"id"}).
+		AddRow(j7.ID)
+	mock.ExpectQuery(readyJobsQuery).
+		WithArgs(3).
+		WillReturnRows(sentRows0)
+
+	// expect next call to get jobs, without configs or prior job IDs
+	sentRows1 := sqlmock.NewRows([]string{"id", "repopull_id", "agent_id", "started_at", "finished_at", "status", "health", "output", "is_ready"}).
+		AddRow(j7.ID, j7.RepoPullID, j7.AgentID, j7.StartedAt, j7.FinishedAt, j7.Status, j7.Health, j7.Output, j7.IsReady)
+	mock.ExpectQuery(`SELECT id, repopull_id, agent_id, started_at, finished_at, status, health, output, is_ready FROM peridot.jobs WHERE id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{7})).
+		WillReturnRows(sentRows1)
+
+	// expect next call to get job configs for found job IDs
+	sentRows2 := sqlmock.NewRows([]string{"job_id", "type", "key", "value", "priorjob_id"}).
+		AddRow(7, 1, "primary", "", 4)
+	mock.ExpectQuery(`SELECT job_id, type, key, value, priorjob_id FROM peridot.jobpathconfigs WHERE job_id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{7})).
+		WillReturnRows(sentRows2)
+
+	// and expect last call to get prior job IDs for found job IDs
+	sentRows3 := sqlmock.NewRows([]string{"job_id", "priorjob_id"}).
+		AddRow(7, 4)
+	mock.ExpectQuery(`SELECT job_id, priorjob_id FROM peridot.jobpriorids WHERE job_id = ANY \(\$1\)`).
+		WithArgs(pq.Array([]uint32{7})).
+		WillReturnRows(sentRows3)
+
+	// run the tested function
+	gotRows, err := db.GetReadyJobs(3)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+
+	// and check returned values; should be ordered by job ID
+	if len(gotRows) != 1 {
+		t.Fatalf("expected len %d, got %d", 1, len(gotRows))
+	}
+	job0 := gotRows[0]
+	helperCompareJobs(t, &j7, job0)
 }
 
 func TestShouldAddJobWithNoPriorJobs(t *testing.T) {

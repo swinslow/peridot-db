@@ -402,20 +402,60 @@ func (db *DB) GetJobByID(id uint32) (*Job, error) {
 	return j, nil
 }
 
-// GetJobsByIDs returns all of the jobs in the database with the given
-// IDs. If any ID is not present, it will be silently omitted (e.g.,
-// no error will be returned); the caller should check to confirm the
-// received jobs match those that were expected.
-func GetJobsByIDs(ids []uint32) ([]*Job, error) {
-	return nil, nil
-}
-
 // GetReadyJobs returns up to n jobs that are "ready", where "ready"
 // means that BOTH (1) IsReady is true and (2) all jobs from its
 // PriorJobIDs are StatusStopped and either HealthOK or HealthDegraded.
 // If n is 0 then all "ready" jobs are returned.
-func GetReadyJobs(n uint32) ([]*Job, error) {
-	return nil, nil
+func (db *DB) GetReadyJobs(n uint32) ([]*Job, error) {
+	readyJobsQuery := `
+SELECT id
+FROM (
+	SELECT id, (CASE WHEN any_prior_unready IS NULL THEN false ELSE any_prior_unready END) AS any_prior_unready, status, health, is_ready
+	FROM peridot.jobs
+	LEFT JOIN (
+		SELECT DISTINCT id, ((priorjob_status != 3) OR (priorjob_health = 3)) AS any_prior_unready
+		FROM (
+			SELECT id, priorjob_id, any_prior_unready
+			FROM (
+				SELECT
+					peridot.jobpriorids.id AS id,
+					peridot.jobpriorids.priorjob_id AS priorjob_id,
+					peridot.jobs.status AS priorjob_status,
+					peridot.jobs.health AS priorjob_health
+				FROM peridot.jobprioids
+				LEFT JOIN peridot.jobs ON peridot.jobprioids.priorjob_id=peridot.jobs.id) calc1
+			) calc2
+		WHERE EXISTS(SELECT 1 WHERE any_prior_unready = true)
+	) calc3 ON peridot.jobs.id = id
+) calc4
+WHERE any_prior_unready = false AND status = 1 AND health = 1 AND is_ready = true
+ORDER BY id
+LIMIT $1;
+`
+
+	jobRows, err := db.sqldb.Query(readyJobsQuery, n)
+	if err != nil {
+		return nil, err
+	}
+	defer jobRows.Close()
+
+	// collect job IDs so we can query them in follow-up call
+	jobIDs := []uint32{}
+
+	for jobRows.Next() {
+		var id uint32
+		err := jobRows.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+
+		jobIDs = append(jobIDs, id)
+	}
+	if err = jobRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return db.GetJobsByIDs(jobIDs)
 }
 
 // AddJob adds a new job as specified, with empty configs.
