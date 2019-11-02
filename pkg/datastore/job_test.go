@@ -96,98 +96,10 @@ func TestShouldGetAllJobsForOneRepoPull(t *testing.T) {
 		t.Fatalf("expected len %d, got %d", 2, len(gotRows))
 	}
 	job0 := gotRows[0]
-	if job0.ID != j4.ID {
-		t.Errorf("expected %v, got %v", j4.ID, job0.ID)
-	}
-	if job0.RepoPullID != j4.RepoPullID {
-		t.Errorf("expected %v, got %v", j4.RepoPullID, job0.RepoPullID)
-	}
-	if job0.AgentID != j4.AgentID {
-		t.Errorf("expected %v, got %v", j4.AgentID, job0.AgentID)
-	}
-	if len(job0.PriorJobIDs) != len(j4.PriorJobIDs) {
-		t.Errorf("expected len %v, got %v", len(j4.PriorJobIDs), len(job0.PriorJobIDs))
-	}
-	if job0.StartedAt != j4.StartedAt {
-		t.Errorf("expected %v, got %v", j4.StartedAt, job0.StartedAt)
-	}
-	if job0.FinishedAt != j4.FinishedAt {
-		t.Errorf("expected %v, got %v", j4.FinishedAt, job0.FinishedAt)
-	}
-	if job0.Status != j4.Status {
-		t.Errorf("expected %v, got %v", j4.Status, job0.Status)
-	}
-	if job0.Health != j4.Health {
-		t.Errorf("expected %v, got %v", j4.Health, job0.Health)
-	}
-	if job0.Output != j4.Output {
-		t.Errorf("expected %v, got %v", j4.Output, job0.Output)
-	}
-	if job0.IsReady != j4.IsReady {
-		t.Errorf("expected %v, got %v", j4.IsReady, job0.IsReady)
-	}
-	if len(job0.Config.KV) != len(j4.Config.KV) {
-		t.Errorf("expected len %v, got %v", len(j4.Config.KV), len(job0.Config.KV))
-	}
-	if job0.Config.KV["hi"] != j4.Config.KV["hi"] {
-		t.Errorf("expected %v, got %v", j4.Config.KV["hi"], job0.Config.KV["hi"])
-	}
-	if job0.Config.KV["hello"] != j4.Config.KV["hello"] {
-		t.Errorf("expected %v, got %v", j4.Config.KV["hello"], job0.Config.KV["hello"])
-	}
-	if len(job0.Config.CodeReader) != len(j4.Config.CodeReader) {
-		t.Errorf("expected len %v, got %v", len(j4.Config.CodeReader), len(job0.Config.CodeReader))
-	}
-	if len(job0.Config.SpdxReader) != len(j4.Config.SpdxReader) {
-		t.Errorf("expected len %v, got %v", len(j4.Config.SpdxReader), len(job0.Config.SpdxReader))
-	}
+	helperCompareJobs(t, &j4, job0)
 
 	job1 := gotRows[1]
-	if job1.ID != j7.ID {
-		t.Errorf("expected %v, got %v", j7.ID, job1.ID)
-	}
-	if job1.RepoPullID != j7.RepoPullID {
-		t.Errorf("expected %v, got %v", j7.RepoPullID, job1.RepoPullID)
-	}
-	if job1.AgentID != j7.AgentID {
-		t.Errorf("expected %v, got %v", j7.AgentID, job1.AgentID)
-	}
-	if len(job1.PriorJobIDs) != len(j7.PriorJobIDs) {
-		t.Errorf("expected len %v, got %v", len(j7.PriorJobIDs), len(job1.PriorJobIDs))
-	}
-	if job1.PriorJobIDs[0] != j7.PriorJobIDs[0] {
-		t.Errorf("expected %v, got %v", j7.PriorJobIDs[0], job1.PriorJobIDs[0])
-	}
-	if job1.StartedAt != j7.StartedAt {
-		t.Errorf("expected %v, got %v", j7.StartedAt, job1.StartedAt)
-	}
-	if job1.FinishedAt != j7.FinishedAt {
-		t.Errorf("expected %v, got %v", j7.FinishedAt, job1.FinishedAt)
-	}
-	if job1.Status != j7.Status {
-		t.Errorf("expected %v, got %v", j7.Status, job1.Status)
-	}
-	if job1.Health != j7.Health {
-		t.Errorf("expected %v, got %v", j7.Health, job1.Health)
-	}
-	if job1.Output != j7.Output {
-		t.Errorf("expected %v, got %v", j7.Output, job1.Output)
-	}
-	if job1.IsReady != j7.IsReady {
-		t.Errorf("expected %v, got %v", j7.IsReady, job1.IsReady)
-	}
-	if len(job1.Config.KV) != len(j7.Config.KV) {
-		t.Errorf("expected len %v, got %v", len(j7.Config.KV), len(job1.Config.KV))
-	}
-	if len(job1.Config.CodeReader) != len(j7.Config.CodeReader) {
-		t.Errorf("expected len %v, got %v", len(j7.Config.CodeReader), len(job1.Config.CodeReader))
-	}
-	if job1.Config.CodeReader["primary"] != j7.Config.CodeReader["primary"] {
-		t.Errorf("expected %v, got %v", j7.Config.CodeReader["primary"], job1.Config.CodeReader["primary"])
-	}
-	if len(job1.Config.SpdxReader) != len(j7.Config.SpdxReader) {
-		t.Errorf("expected len %v, got %v", len(j7.Config.SpdxReader), len(job1.Config.SpdxReader))
-	}
+	helperCompareJobs(t, &j7, job1)
 }
 
 func TestShouldGetJobByID(t *testing.T) {
@@ -251,51 +163,7 @@ func TestShouldGetJobByID(t *testing.T) {
 	}
 
 	// and check returned values
-	if job.ID != j7.ID {
-		t.Errorf("expected %v, got %v", j7.ID, job.ID)
-	}
-	if job.RepoPullID != j7.RepoPullID {
-		t.Errorf("expected %v, got %v", j7.RepoPullID, job.RepoPullID)
-	}
-	if job.AgentID != j7.AgentID {
-		t.Errorf("expected %v, got %v", j7.AgentID, job.AgentID)
-	}
-	if len(job.PriorJobIDs) != len(j7.PriorJobIDs) {
-		t.Errorf("expected len %v, got %v", len(j7.PriorJobIDs), len(job.PriorJobIDs))
-	}
-	if job.PriorJobIDs[0] != j7.PriorJobIDs[0] {
-		t.Errorf("expected %v, got %v", j7.PriorJobIDs[0], job.PriorJobIDs[0])
-	}
-	if job.StartedAt != j7.StartedAt {
-		t.Errorf("expected %v, got %v", j7.StartedAt, job.StartedAt)
-	}
-	if job.FinishedAt != j7.FinishedAt {
-		t.Errorf("expected %v, got %v", j7.FinishedAt, job.FinishedAt)
-	}
-	if job.Status != j7.Status {
-		t.Errorf("expected %v, got %v", j7.Status, job.Status)
-	}
-	if job.Health != j7.Health {
-		t.Errorf("expected %v, got %v", j7.Health, job.Health)
-	}
-	if job.Output != j7.Output {
-		t.Errorf("expected %v, got %v", j7.Output, job.Output)
-	}
-	if job.IsReady != j7.IsReady {
-		t.Errorf("expected %v, got %v", j7.IsReady, job.IsReady)
-	}
-	if len(job.Config.KV) != len(j7.Config.KV) {
-		t.Errorf("expected len %v, got %v", len(j7.Config.KV), len(job.Config.KV))
-	}
-	if len(job.Config.CodeReader) != len(j7.Config.CodeReader) {
-		t.Errorf("expected len %v, got %v", len(j7.Config.CodeReader), len(job.Config.CodeReader))
-	}
-	if job.Config.CodeReader["primary"] != j7.Config.CodeReader["primary"] {
-		t.Errorf("expected %v, got %v", j7.Config.CodeReader["primary"], job.Config.CodeReader["primary"])
-	}
-	if len(job.Config.SpdxReader) != len(j7.Config.SpdxReader) {
-		t.Errorf("expected len %v, got %v", len(j7.Config.SpdxReader), len(job.Config.SpdxReader))
-	}
+	helperCompareJobs(t, &j7, job)
 }
 
 func TestShouldFailGetJobByIDForUnknownID(t *testing.T) {
@@ -1082,5 +950,124 @@ func TestCannotUnmarshalJobWithNegativeIDFromJSON(t *testing.T) {
 	err := json.Unmarshal(js, j)
 	if err == nil {
 		t.Fatalf("expected non-nil error, got nil")
+	}
+}
+
+// ===== HELPERS for jobs db tests =====
+
+func helperCompareJobs(t *testing.T, expected *Job, got *Job) {
+	if expected.ID != got.ID {
+		t.Errorf("expected %#v, got %#v", expected.ID, got.ID)
+	}
+
+	if expected.RepoPullID != got.RepoPullID {
+		t.Errorf("expected %#v, got %#v", expected.RepoPullID, got.RepoPullID)
+	}
+
+	if expected.AgentID != got.AgentID {
+		t.Errorf("expected %#v, got %#v", expected.AgentID, got.AgentID)
+	}
+
+	if len(expected.PriorJobIDs) != len(got.PriorJobIDs) {
+		t.Errorf("expected %#v, got %#v", len(expected.PriorJobIDs), len(got.PriorJobIDs))
+	} else {
+		for i := range expected.PriorJobIDs {
+			if expected.PriorJobIDs[i] != got.PriorJobIDs[i] {
+				t.Errorf("for index %d, expected %#v, got %#v", i, expected.PriorJobIDs[i], got.PriorJobIDs[i])
+			}
+		}
+	}
+
+	if expected.StartedAt != got.StartedAt {
+		t.Errorf("expected %#v, got %#v", expected.StartedAt, got.StartedAt)
+	}
+
+	if expected.FinishedAt != got.FinishedAt {
+		t.Errorf("expected %#v, got %#v", expected.FinishedAt, got.FinishedAt)
+	}
+
+	if expected.Status != got.Status {
+		t.Errorf("expected %#v, got %#v", expected.Status, got.Status)
+	}
+
+	if expected.Health != got.Health {
+		t.Errorf("expected %#v, got %#v", expected.Health, got.Health)
+	}
+
+	if expected.Output != got.Output {
+		t.Errorf("expected %#v, got %#v", expected.Output, got.Output)
+	}
+
+	if expected.IsReady != got.IsReady {
+		t.Errorf("expected %#v, got %#v", expected.IsReady, got.IsReady)
+	}
+
+	if len(expected.Config.KV) != len(got.Config.KV) {
+		t.Errorf("expected %#v, got %#v", len(expected.Config.KV), len(got.Config.KV))
+	} else {
+		for kExp, vExp := range expected.Config.KV {
+			vGot, ok := got.Config.KV[kExp]
+			if !ok {
+				t.Errorf("key %v in expected, not in got", kExp)
+			} else {
+				if vExp != vGot {
+					t.Errorf("expected %#v, got %#v", vExp, vGot)
+				}
+			}
+		}
+		for kGot := range got.Config.KV {
+			_, ok := expected.Config.KV[kGot]
+			if !ok {
+				t.Errorf("key %v in got, not in expected", kGot)
+			}
+		}
+	}
+
+	if len(expected.Config.CodeReader) != len(got.Config.CodeReader) {
+		t.Errorf("expected %#v, got %#v", len(expected.Config.CodeReader), len(got.Config.CodeReader))
+	} else {
+		for kExp, vExp := range expected.Config.CodeReader {
+			vGot, ok := got.Config.CodeReader[kExp]
+			if !ok {
+				t.Errorf("key %v in expected, not in got", kExp)
+			} else {
+				if vExp.Value != vGot.Value {
+					t.Errorf("expected %#v, got %#v", vExp.Value, vGot.Value)
+				}
+				if vExp.PriorJobID != vGot.PriorJobID {
+					t.Errorf("expected %#v, got %#v", vExp.PriorJobID, vGot.PriorJobID)
+				}
+			}
+		}
+		for kGot := range got.Config.CodeReader {
+			_, ok := expected.Config.CodeReader[kGot]
+			if !ok {
+				t.Errorf("key %v in got, not in expected", kGot)
+			}
+		}
+	}
+
+	if len(expected.Config.SpdxReader) != len(got.Config.SpdxReader) {
+		t.Errorf("expected %#v, got %#v", len(expected.Config.SpdxReader), len(got.Config.SpdxReader))
+	} else {
+		for kExp, vExp := range expected.Config.SpdxReader {
+			vGot, ok := got.Config.SpdxReader[kExp]
+			if !ok {
+				t.Errorf("key %v in expected, not in got", kExp)
+			} else {
+				if vExp.Value != vGot.Value {
+					t.Errorf("expected %#v, got %#v", vExp.Value, vGot.Value)
+				}
+				if vExp.PriorJobID != vGot.PriorJobID {
+					t.Errorf("expected %#v, got %#v", vExp.PriorJobID, vGot.PriorJobID)
+				}
+			}
+		}
+		for kGot := range got.Config.SpdxReader {
+			_, ok := expected.Config.SpdxReader[kGot]
+			if !ok {
+				t.Errorf("key %v in got, not in expected", kGot)
+			}
+		}
 	}
 }
