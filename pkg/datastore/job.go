@@ -632,6 +632,35 @@ func (db *DB) UpdateJobIsReady(id uint32, ready bool) error {
 	return nil
 }
 
+// UpdateJobStatus sets the status variables for this job.
+func (db *DB) UpdateJobStatus(id uint32, startedAt time.Time, finishedAt time.Time, status Status, health Health, output string) error {
+	var err error
+	var result sql.Result
+
+	// FIXME consider whether to move out into one-time-prepared statements
+	stmt, err := db.sqldb.Prepare("UPDATE peridot.jobs SET started_at = $1, finished_at = $2, status = $3, health = $4, output = $5 WHERE id = $6")
+	if err != nil {
+		return err
+	}
+	result, err = stmt.Exec(startedAt, finishedAt, status, health, output, id)
+
+	// check error
+	if err != nil {
+		return err
+	}
+
+	// check that something was actually updated
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no job found with ID %v", id)
+	}
+
+	return nil
+}
+
 // DeleteJob deletes an existing Job with the given ID.
 // It returns nil on success or an error if failing.
 func (db *DB) DeleteJob(id uint32) error {

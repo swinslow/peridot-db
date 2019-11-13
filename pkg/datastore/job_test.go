@@ -851,6 +851,69 @@ func TestShouldFailUpdateJobIsReadyWithUnknownID(t *testing.T) {
 	}
 }
 
+func TestShouldUpdateJobStatus(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	start := time.Date(2019, 5, 4, 12, 0, 0, 0, time.UTC)
+	finish := time.Date(2019, 5, 4, 12, 0, 1, 0, time.UTC)
+
+	regexStmt := `[UPDATE peridot.job SET started_at = \$1, finished_at = \$2, status = \$3, health = \$4, output = \$5 WHERE id = \$6]`
+	mock.ExpectPrepare(regexStmt)
+	stmt := "UPDATE peridot.jobs"
+	mock.ExpectExec(stmt).
+		WithArgs(start, finish, StatusRunning, HealthDegraded, "unable to open some files", 12).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// run the tested function
+	err = db.UpdateJobStatus(12, start, finish, StatusRunning, HealthDegraded, "unable to open some files")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestShouldFailUpdateJobStatusWithUnknownID(t *testing.T) {
+	// set up mock
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("got error when creating db mock: %v", err)
+	}
+	defer sqldb.Close()
+	db := DB{sqldb: sqldb}
+
+	start := time.Date(2019, 5, 4, 12, 0, 0, 0, time.UTC)
+	finish := time.Date(2019, 5, 4, 12, 0, 1, 0, time.UTC)
+
+	regexStmt := `[UPDATE peridot.job SET started_at = \$1, finished_at = \$2, status = \$3, health = \$4, output = \$5 WHERE id = \$6]`
+	mock.ExpectPrepare(regexStmt)
+	stmt := "UPDATE peridot.jobs"
+	mock.ExpectExec(stmt).
+		WithArgs(start, finish, StatusRunning, HealthDegraded, "unable to open some files", 413).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// run the tested function with an unknown project ID number
+	err = db.UpdateJobStatus(413, start, finish, StatusRunning, HealthDegraded, "unable to open some files")
+	if err == nil {
+		t.Fatalf("expected non-nil error, got nil")
+	}
+
+	// check sqlmock expectations
+	err = mock.ExpectationsWereMet()
+	if err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
 func TestShouldDeleteJob(t *testing.T) {
 	// set up mock
 	sqldb, mock, err := sqlmock.New()
