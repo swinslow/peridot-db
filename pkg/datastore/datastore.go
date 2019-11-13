@@ -234,6 +234,8 @@ type Datastore interface {
 	// It does _not_ actually run the Job. It returns nil on
 	// success or an error if failing.
 	UpdateJobIsReady(id uint32, ready bool) error
+	// UpdateJobStatus sets the status variables for this job.
+	UpdateJobStatus(id uint32, startedAt time.Time, finishedAt time.Time, status Status, health Health, output string) error
 	// DeleteJob deletes an existing Job with the given ID.
 	// It returns nil on success or an error if failing.
 	DeleteJob(id uint32) error
