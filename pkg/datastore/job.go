@@ -422,8 +422,8 @@ FROM (
 					peridot.jobpriorids.priorjob_id AS priorjob_id,
 					peridot.jobs.status AS priorjob_status,
 					peridot.jobs.health AS priorjob_health
-				FROM peridot.jobprioids
-				LEFT JOIN peridot.jobs ON peridot.jobprioids.priorjob_id=peridot.jobs.id) calc1
+				FROM peridot.jobpriorids
+				LEFT JOIN peridot.jobs ON peridot.jobpriorids.priorjob_id=peridot.jobs.id) calc1
 			) calc2
 		WHERE EXISTS(SELECT 1 WHERE any_prior_unready = true)
 	) calc3 ON peridot.jobs.id = id
